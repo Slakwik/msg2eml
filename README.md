@@ -23,3 +23,6 @@ Either convert a single file by piping:
 Or convert a set of files:
 
 	msg2eml *.msg
+
+UPD:
+Added an set of the incoming and outgoing file over args
