@@ -21,6 +21,19 @@ import compoundfiles
 
 # MAIN FUNCTIONS
 
+def save_message_to_file(msg, output_file):
+    """
+    Сохраняет объект MIME-сообщения в файл.
+    :param msg: Объект email.message.EmailMessage.
+    :param output_file: Путь к выходному файлу.
+    """
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(msg.as_string())
+        print(f"Файл успешно сохранен как {output_file}")
+    except Exception as e:
+        print(f"Ошибка при сохранении файла: {e}")
+
 
 def load(filename_or_stream):
   with compoundfiles.CompoundFileReader(filename_or_stream) as doc:
@@ -787,22 +800,27 @@ property_tags = {
   0x3F08: ('INITIAL_DETAILS_PANE', 'I4'),
 }
 
+def main():
+    parser = argparse.ArgumentParser(description="Конвертирует .msg файлы в .eml формат.")
+    parser.add_argument("-i","--input", required=True, help="Путь к входному .msg файлу")
+    parser.add_argument("-o", "--output", required=True, help="Путь к выходному .eml файлу")
+
+    args = parser.parse_args()
+
+    input_file = args.input
+    output_file = args.output
+
+    # Если расширение не указано, добавляем .eml
+    if not output_file.lower().endswith('.eml'):
+        output_file += '.eml'
+
+    # Загружаем сообщение из .msg файла
+    try:
+        msg = load(input_file)
+        save_message_to_file(msg, output_file)
+    except Exception as e:
+        print(f"Произошла ошибка при обработке файла: {e}")
 
 # COMMAND-LINE ENTRY POINT
-
-
 if __name__ == "__main__":
-  # If no command-line arguments are given, convert the .msg
-  # file on STDIN to .eml format on STDOUT.
-  if len(sys.argv) <= 1:
-    print(load(sys.stdin), file=sys.stdout)
-
-  # Otherwise, for each file mentioned on the command-line,
-  # convert it and save it to a file with ".eml" appended
-  # to the name.
-  else:
-    for fn in sys.argv[1:]:
-      print(fn + "...")
-      msg = load(fn)
-      with open(fn + ".eml", "wb") as f:
-        f.write(msg.as_bytes())
+  main()
