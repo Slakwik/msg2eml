@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/python3
 
 # Referencecs:
 
@@ -9,6 +9,7 @@
 
 import re
 import sys
+import argparse
 
 from functools import reduce
 
@@ -34,7 +35,6 @@ def save_message_to_file(msg, output_file):
     except Exception as e:
         print(f"Ошибка при сохранении файла: {e}")
 
-
 def load(filename_or_stream):
   with compoundfiles.CompoundFileReader(filename_or_stream) as doc:
     doc.rtf_attachments = 0
@@ -53,21 +53,22 @@ def load_message_stream(entry, is_top_level, doc):
     # Get the string holding all of the headers.
     headers = props['TRANSPORT_MESSAGE_HEADERS']
     if isinstance(headers, bytes):
-      headers = headers.decode("utf-8")
+      headers = headers.decode("utf-8", errors="replace")
 
     # Remove content-type header because the body we can get this
     # way is just the plain-text portion of the email and whatever
     # Content-Type header was in the original is not valid for
     # reconstructing it this way.
-    headers = re.sub("Content-Type: .*(\n\s.*)*\n", "", headers, re.I)
+    headers = re.sub("Content-Type: .*(\n\s.*)*\n", "", headers, flags=re.IGNORECASE)
 
     # Parse them.
-    headers = email.parser.HeaderParser(policy=email.policy.default)\
-      .parsestr(headers)
+    headers = email.parser.HeaderParser(policy=email.policy.default).parsestr(headers)
 
     # Copy them into the message object.
     for header, value in headers.items():
-      msg[header] = value
+      print(f"Headers: {header} - {value}")
+      safe_value = value[:255]  # Ограничиваем длину до 255 символов
+      msg[header] = safe_value
 
   else:
     # Construct common headers from metadata.
@@ -134,37 +135,47 @@ def load_message_stream(entry, is_top_level, doc):
 
   return msg
 
+import re
 
 def process_attachment(msg, entry, doc):
-  # Load attachment stream.
-  props = parse_properties(entry['__properties_version1.0'], False, entry, doc)
+    # Load attachment stream.
+    props = parse_properties(entry['__properties_version1.0'], False, entry, doc)
 
-  # The attachment content...
-  blob = props['ATTACH_DATA_BIN']
+    # The attachment content...
+    blob = props['ATTACH_DATA_BIN']
 
-  # Get the filename and MIME type of the attachment.
-  filename = props.get("ATTACH_FILENAME") or props.get("DISPLAY_NAME")
-  if isinstance(filename, bytes): filename = filename.decode("utf8")
+    # Get the filename and MIME type of the attachment.
+    filename = props.get("ATTACH_FILENAME") or props.get("DISPLAY_NAME")
+    
+    # Decode filename if it's in bytes
+    if isinstance(filename, bytes):
+        filename = filename.decode("utf-8", errors="replace")
 
-  mime_type = props.get('ATTACH_MIME_TAG', 'application/octet-stream')
-  if isinstance(mime_type, bytes): mime_type = mime_type.decode("utf8")
+    # Отладочный вывод для проверки исходного имени файла
+    print(f"Original Filename: {filename!r}")
 
-  filename = urllib.parse.quote_plus(filename)
+    # Замена всех символов, кроме букв, цифр и точки на "_"
+    safe_filename = re.sub(r'[^a-zA-Z0-9\.]', '_', filename)
+    print(f"Sanitized Filename: {safe_filename}")
 
-  # Python 3.6.
-  if isinstance(blob, str):
-    msg.add_attachment(
-      blob,
-      filename=filename)
-  elif isinstance(blob, bytes):
-    msg.add_attachment(
-      blob,
-      maintype=mime_type.split("/", 1)[0], subtype=mime_type.split("/", 1)[-1],
-      filename=filename)
-  else: # a Message instance
-    msg.add_attachment(
-      blob,
-      filename=filename)
+    mime_type = props.get('ATTACH_MIME_TAG', 'application/octet-stream')
+    if isinstance(mime_type, bytes):
+        mime_type = mime_type.decode("utf-8", errors="replace")
+
+    # Python 3.6.
+    if isinstance(blob, str):
+        msg.add_attachment(
+            blob,
+            filename=safe_filename)  # Используем безопасное имя файла
+    elif isinstance(blob, bytes):
+        msg.add_attachment(
+            blob,
+            maintype=mime_type.split("/", 1)[0], subtype=mime_type.split("/", 1)[-1],
+            filename=safe_filename)  # Используем безопасное имя файла
+    else:  # a Message instance
+        msg.add_attachment(
+            blob,
+            filename=safe_filename)  # Используем безопасное имя файла
 
 def parse_properties(properties, is_top_level, container, doc):
   # Read a properties stream and return a Python dictionary
@@ -821,6 +832,9 @@ def main():
     except Exception as e:
         print(f"Произошла ошибка при обработке файла: {e}")
 
+
 # COMMAND-LINE ENTRY POINT
+
+
 if __name__ == "__main__":
   main()
