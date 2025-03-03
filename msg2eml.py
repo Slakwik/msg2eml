@@ -67,7 +67,7 @@ def load_message_stream(entry, is_top_level, doc):
     # Copy them into the message object.
     for header, value in headers.items():
       print(f"Headers: {header} - {value}")
-      safe_value = value[:255]  # Ограничиваем длину до 255 символов
+      safe_value = value[:200]  # Ограничиваем длину до 255 символов
       msg[header] = safe_value
 
   else:
